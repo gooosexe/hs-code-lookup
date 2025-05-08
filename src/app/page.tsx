@@ -21,7 +21,7 @@ export default function HSMatcher() {
 	};
 
 	return (
-		<div className="p-4 max-w-xl mx-auto">
+		<div className="p-4 max-w-4xl mx-auto">
 			<div className="flex gap-2">
 				<input
 					className="flex-1 border p-2 rounded"
@@ -40,7 +40,7 @@ export default function HSMatcher() {
 			<div className="mt-6 space-y-4">
 				{results.map((r, i) => (
 					<div key={i} className="border p-3 rounded shadow-sm">
-						<div className="font-bold">{r.code}</div>
+						<div className="font-bold text-2xl">{r.code}</div>
 						<div>{r.description}</div>
 					</div>
 				))}
