@@ -21,31 +21,24 @@ This is a web application for identifying appropriate Harmonized System (HS) tar
 
 ## Setup
 
-1. **Clone the repository:**
+1. **Run the following:**
 
    ```bash
    git clone https://github.com/yourusername/hs-code-matcher.git
    cd hs-code-matcher
+   npm install
+   ```
 
-	2.	Install dependencies:
-
-npm install
-
-
-	3.	Add your OpenAI API key:
+2.	Add your OpenAI API key:
 Create a .env.local file with:
+`OPENAI_API_KEY=your_api_key_here`
 
-OPENAI_API_KEY=your_api_key_here
-
-
-	4.	Run the app:
-
-npm run dev
+4.	Run the app:
+`npm run dev`
 
 Open http://localhost:3000 in your browser.
 
-Data
-
+## Data
 The HS codes are loaded from a static JSON file located at app/data/hs_codes.json. This file should contain entries with at least:
 
 [
@@ -54,9 +47,3 @@ The HS codes are loaded from a static JSON file located at app/data/hs_codes.jso
     "description": "Automatic data processing machines and units thereof..."
   }
 ]
-
-License
-
-MIT. See LICENSE.
-
-Let me know if you want a version with images, deployment instructions (e.g. for Vercel), or badges.
