@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
 			{
 				role: "system",
 				content:
-					"From the product description, extract the key functionalities and uses of the product. For example, if the product is a tool holder, describe what tools it holds and where it would be used. Get up to 3 relevant phrases for matching against official tariff descriptions. Only provide the words, do not have numbering before the words. Try not to use single words. Keep it less than 4 words.",
+					"From the product description, extract the key functionalities and uses of the product. For example, if the product is a tool holder, describe what tools it holds and where it would be used. Get up to 3 relevant phrases for matching against official tariff descriptions. Only provide the words, do not have numbering before the words. Try not to use single words. Keep it less than 4 words. Always ignore colours and the like.",
 			},
 			{
 				role: "user",

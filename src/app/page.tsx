@@ -22,28 +22,34 @@ export default function HSMatcher() {
 
 	return (
 		<div className="p-4 max-w-4xl mx-auto">
+			<h1 className="text-2xl font-bold my-2">Canadian HS Code Lookup</h1>
 			<div className="flex gap-2">
 				<input
-					className="flex-1 border p-2 rounded"
+					className="flex-1 border-2 p-2 rounded"
 					placeholder="Enter product description"
 					value={query}
 					onChange={(e) => setQuery(e.target.value)}
 				/>
 				<button
-					className="bg-blue-600 text-white px-4 py-2 rounded"
+					className="bg-white text-black px-4 py-2 rounded disabled:opacity-50 active:translate-y-1"
 					onClick={submit}
-					disabled={loading}
+					disabled={loading || !query.trim()}
 				>
 					{loading ? "Searching…" : "Submit"}
 				</button>
 			</div>
+
 			<div className="mt-6 space-y-4">
-				{results.map((r, i) => (
-					<div key={i} className="border p-3 rounded shadow-sm">
-						<div className="font-bold text-2xl">{r.code}</div>
-						<div>{r.description}</div>
-					</div>
-				))}
+				{results.length > 0
+					? results.map((r, i) => (
+							<div key={i} className="p-3 rounded shadow-sm">
+								<div className="font-bold text-2xl">{r.code}</div>
+								<div>{r.description}</div>
+							</div>
+						))
+					: !loading && (
+							<div className="text-gray-600 italic">No results found.</div>
+						)}
 			</div>
 		</div>
 	);
