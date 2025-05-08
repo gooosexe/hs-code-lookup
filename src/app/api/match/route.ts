@@ -1,11 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { OpenAI } from "openai";
 import Fuse from "fuse.js";
-import hsData from "@/app/data/hs_codes.json"; // Or import dynamically if needed
+import hsData from "@/app/data/hs_codes.json"; // Static import, OK for server-side
+import { z } from "zod";
+import path from "path";
+import fs from "fs";
 
-const openai = new OpenAI({
-	apiKey: process.env.OPENAI_API_KEY,
-});
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+const cachePath = path.resolve(process.cwd(), "src/app/data/cache.json");
+
+function loadCache(): Record<string, any> {
+	try {
+		return JSON.parse(fs.readFileSync(cachePath, "utf-8"));
+	} catch {
+		return {};
+	}
+}
+
+function saveCache(cache: Record<string, any>) {
+	fs.writeFileSync(cachePath, JSON.stringify(cache, null, 2));
+}
 
 function normalize(s: string) {
 	return s
@@ -15,8 +30,23 @@ function normalize(s: string) {
 		.trim();
 }
 
+// Define expected data shape to avoid TS issues
+type HSCodeEntry = {
+	code: string;
+	description: string;
+	score: number; // added field for scoring
+};
+
 export async function POST(req: NextRequest) {
-	const { query } = await req.json();
+	const body = await req.json();
+	const query = z.string().min(1).parse(body.query);
+	const key = normalize(query);
+	const cache = loadCache();
+
+	if (cache[key]) {
+		console.log("Exists in cache, retrieving");
+		return NextResponse.json({ fromCache: true, ...cache[key] });
+	}
 
 	const gptResp = await openai.chat.completions.create({
 		model: "gpt-4o-mini",
@@ -24,7 +54,7 @@ export async function POST(req: NextRequest) {
 			{
 				role: "system",
 				content:
-					"From the product description, extract the key functionalities and uses of the product. For example, if the product is a tool holder, describe what tools it holds and where it would be used. Get 3 to 5 relevant phrases for matching against official tariff descriptions. Only provide the words, do not have numbering before the words. Try not to use single words. Keep it less than 4 words.",
+					"From the product description, extract the key functionalities and uses of the product. For example, if the product is a tool holder, describe what tools it holds and where it would be used. Get up to 3 relevant phrases for matching against official tariff descriptions. Only provide the words, do not have numbering before the words. Try not to use single words. Keep it less than 4 words.",
 			},
 			{
 				role: "user",
@@ -39,22 +69,9 @@ export async function POST(req: NextRequest) {
 		.map((k) => k.trim().toLowerCase())
 		.filter(Boolean);
 
-	// const keywords = [
-	// 	"magnetic tool holder",
-	// 	"organizer for tools",
-	// 	"metal object mounting",
-	// 	"wall-mounted storage rail",
-	// 	"tool storage solution",
-	// 	"magnetic surface for fastening",
-	// 	"hanging bar for tools",
-	// 	"magnetic rack for garage",
-	// 	"tool organizer for workspace",
-	// 	"storage for metal items",
-	// ];
-
-	// Simple keyword scoring
-	console.log("Scoring keywords");
-	const scored = hsData.map((entry) => {
+	// Keyword scoring
+	console.log("Direct search");
+	const scored: HSCodeEntry[] = hsData.map((entry) => {
 		const haystack = normalize(entry.description);
 		let score = 0;
 		for (const kw of keywords) {
@@ -73,8 +90,8 @@ export async function POST(req: NextRequest) {
 		.sort((a, b) => b.score - a.score)
 		.slice(0, 5);
 
-	// Fallback with Fuse.js
-	console.log("falling back to fuzzy search");
+	// Fuzzy fallback
+	console.log("No results, falling back to fuzzy search");
 	if (matches.length === 0) {
 		const fuse = new Fuse(hsData, {
 			keys: ["description"],
@@ -85,12 +102,12 @@ export async function POST(req: NextRequest) {
 		const fuseResults = fuse.search(keywords.join(" ")).slice(0, 5);
 		matches = fuseResults.map((r) => ({
 			...r.item,
-			score: r.score ?? 0, // Ensure the score is included even when using Fuse.js
+			score: 0.5 * (1 - (r.score ?? 1)), // Flip score so higher = better
 		}));
 	}
 
-	console.log("falling back onto gpt");
-	const finalquery = keywords.join(", ");
+	// Final LLM fallback
+	console.log("No results, falling back to LLM");
 	if (matches.length === 0) {
 		const fallbackResp = await openai.chat.completions.create({
 			model: "gpt-4o",
@@ -102,27 +119,32 @@ export async function POST(req: NextRequest) {
 				},
 				{
 					role: "user",
-					content: `Product description: "${finalquery}"`,
+					content: `Product description: "${keywords.join(", ")}"`,
 				},
 			],
 		});
 
-		console.log(fallbackResp);
-		console.log(finalquery);
+		const hsCodeLine = fallbackResp.choices[0].message.content?.trim() ?? "";
 
-		const hsCode = fallbackResp.choices[0].message.content?.trim();
-		console.log(hsCode);
+		// Regex match all patterns like 85.36.90
+		const extractedCodes = Array.from(
+			hsCodeLine.matchAll(/\d{2}\.\d{2}\.\d{2}/g),
+		).map((m) => m[0]);
 
-		if (hsCode) {
-			const filtered = hsData.filter((entry) => entry.code.includes(hsCode));
-			if (filtered.length > 0) {
-				matches = filtered.map((entry) => ({ ...entry, score: 1.0 }));
-			}
+		if (extractedCodes.length > 0) {
+			const fallbackMatches = hsData
+				.filter((entry) =>
+					extractedCodes.some((code) => entry.code.includes(code)),
+				)
+				.map((entry) => ({ ...entry, score: 0.9 }));
+
+			if (fallbackMatches.length > 0) matches = fallbackMatches;
 		}
 	}
 
-	return NextResponse.json({
-		keywords,
-		matches,
-	});
+	const result = { keywords, matches };
+	cache[key] = result;
+	saveCache(cache);
+
+	return NextResponse.json(result);
 }
